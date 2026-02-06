@@ -1,0 +1,5 @@
+# ユーザー設定ファイル
+# 初期管理者: admin / admin123
+
+credentials:
+  usernames: {}
