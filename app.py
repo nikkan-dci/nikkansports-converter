@@ -30,13 +30,10 @@ st.set_page_config(
 
 def get_api_key():
     """APIキーを取得（Secrets または 環境変数）"""
-    # Streamlit Secretsから取得を試みる
     try:
         return st.secrets["ANTHROPIC_API_KEY"]
     except (KeyError, FileNotFoundError):
         pass
-    
-    # 環境変数から取得
     return os.getenv('ANTHROPIC_API_KEY')
 
 
@@ -45,7 +42,6 @@ def get_initial_users():
     try:
         return dict(st.secrets["users"])
     except (KeyError, FileNotFoundError):
-        # デフォルトの管理者アカウント
         return {
             "admin": {
                 "name": "管理者",
@@ -205,7 +201,7 @@ def main_page():
         with col_btn2:
             if st.button("🚪 ログアウト", use_container_width=True):
                 for key in list(st.session_state.keys()):
-                    if key != 'users_db':  # ユーザーDBは保持
+                    if key != 'users_db':
                         del st.session_state[key]
                 st.rerun()
     
@@ -229,14 +225,12 @@ def main_page():
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.subheader("📄 Word原稿をアップロード")
+        st.subheader("📄 原稿をアップロード")
         
         uploaded_file = st.file_uploader(
-    "原稿ファイルをドラッグ＆ドロップ、またはクリックして選択",
-    type=['docx', 'txt'],
-    help="Word形式（.docx）またはテキスト形式（.txt）に対応"
-)
-            help="日刊スポーツの記事原稿（Word形式）をアップロードしてください"
+            "原稿ファイルをドラッグ＆ドロップ、またはクリックして選択",
+            type=['docx', 'txt'],
+            help="Word形式（.docx）またはテキスト形式（.txt）に対応"
         )
         
         st.subheader("⚙️ 設定（任意）")
@@ -255,12 +249,13 @@ def main_page():
             with st.spinner("変換中...（30秒〜1分程度）"):
                 try:
                     file_bytes = uploaded_file.read()
-                   # ファイル形式を判定
-file_type = "txt" if uploaded_file.name.endswith('.txt') else "docx"
-article_text = extract_text_only(file_bytes, file_type)
+                    
+                    # ファイル形式を判定
+                    file_type = "txt" if uploaded_file.name.endswith('.txt') else "docx"
+                    article_text = extract_text_only(file_bytes, file_type)
                     
                     if not article_text.strip():
-                        st.error("❌ Word原稿からテキストを抽出できませんでした")
+                        st.error("❌ 原稿からテキストを抽出できませんでした")
                         return
                     
                     result = convert_to_markdown(
@@ -302,7 +297,7 @@ article_text = extract_text_only(file_bytes, file_type)
                     st.error(f"❌ エラーが発生しました: {str(e)}")
         
         elif convert_button and uploaded_file is None:
-            st.warning("⚠️ Word原稿をアップロードしてください")
+            st.warning("⚠️ 原稿ファイルをアップロードしてください")
         
         # ダウンロードボタン
         if 'markdown_result' in st.session_state:
@@ -361,7 +356,6 @@ def admin_page():
     
     users = get_users()
     
-    # ユーザー一覧
     st.write("**現在のユーザー：**")
     for username, user_info in users.items():
         col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
@@ -382,7 +376,6 @@ def admin_page():
     
     st.divider()
     
-    # ユーザー追加
     st.subheader("➕ ユーザー追加")
     
     with st.form("add_user_form"):
@@ -402,7 +395,6 @@ def admin_page():
             else:
                 st.error("❌ すべての項目を入力してください")
     
-    # 注意事項
     st.divider()
     st.warning("""
     ⚠️ **注意事項**
@@ -428,12 +420,10 @@ def main():
     """メイン処理"""
     load_css()
     
-    # 認証チェック
     if not st.session_state.get('authenticated', False):
         login_page()
         return
     
-    # ページルーティング
     page = st.session_state.get('page', 'main')
     
     if page == 'admin' and st.session_state.get('user_role') == 'admin':
