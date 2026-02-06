@@ -231,7 +231,7 @@ def main_page():
     with col1:
         st.subheader("📄 Word原稿をアップロード")
         
-       uploaded_file = st.file_uploader(
+        uploaded_file = st.file_uploader(
     "原稿ファイルをドラッグ＆ドロップ、またはクリックして選択",
     type=['docx', 'txt'],
     help="Word形式（.docx）またはテキスト形式（.txt）に対応"
