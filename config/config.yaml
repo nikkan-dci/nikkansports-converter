@@ -1,0 +1,20 @@
+# アプリケーション設定
+
+app:
+  name: "日刊スポーツ マークダウン変換ツール"
+  version: "1.0.0"
+
+# Claude API設定
+claude:
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 8000
+
+# 変換設定
+conversion:
+  heading_interval: 500
+  members_position_min: 15
+  members_position_max: 25
+
+# 記者名リスト（プルダウン用）
+reporters:
+  - "（指定なし）"
