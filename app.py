@@ -231,9 +231,11 @@ def main_page():
     with col1:
         st.subheader("📄 Word原稿をアップロード")
         
-        uploaded_file = st.file_uploader(
-            "Word原稿（.docx）をドラッグ＆ドロップ、またはクリックして選択",
-            type=['docx'],
+       uploaded_file = st.file_uploader(
+    "原稿ファイルをドラッグ＆ドロップ、またはクリックして選択",
+    type=['docx', 'txt'],
+    help="Word形式（.docx）またはテキスト形式（.txt）に対応"
+)
             help="日刊スポーツの記事原稿（Word形式）をアップロードしてください"
         )
         
@@ -253,7 +255,9 @@ def main_page():
             with st.spinner("変換中...（30秒〜1分程度）"):
                 try:
                     file_bytes = uploaded_file.read()
-                    article_text = extract_text_only(file_bytes)
+                   # ファイル形式を判定
+file_type = "txt" if uploaded_file.name.endswith('.txt') else "docx"
+article_text = extract_text_only(file_bytes, file_type)
                     
                     if not article_text.strip():
                         st.error("❌ Word原稿からテキストを抽出できませんでした")
