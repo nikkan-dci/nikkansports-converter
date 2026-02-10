@@ -153,3 +153,89 @@ def proofread_article(
             'issues_count': 0,
             'error': f'校閲エラー: {str(e)}'
         }
+
+
+def revise_markdown(
+    markdown_text: str,
+    revision_request: str,
+    api_key: str = None,
+) -> dict:
+    """
+    マークダウン記事を修正リクエストに基づいて修正
+    """
+    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+    
+    if not api_key:
+        return {
+            'success': False,
+            'markdown': '',
+            'error': 'ANTHROPIC_API_KEYが設定されていません'
+        }
+    
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        system_prompt = """あなたは日刊スポーツのマークダウン記事を編集するエディターです。
+
+ユーザーから修正リクエストを受け取り、既存のマークダウン記事を修正してください。
+
+【重要なルール】
+1. 修正リクエストで指示された箇所のみを修正する
+2. 指示されていない部分は一切変更しない
+3. マークダウンのタグ形式（##head##、####など）は維持する
+4. 修正後のマークダウン全体を出力する
+5. 説明は不要、マークダウンのみを出力する
+
+【タグ形式のルール】
+- 中見出し：##head##（改行）見出しテキスト（改行）####
+- サマリー：##intro##（改行）テキスト（改行）####
+- 引用：##quoto##（改行）テキスト（改行）####
+- 見所：##mokuji-2##★見出し##（改行）|項目|（改行）####
+- 略歴：##comment##（改行）テキスト（改行）####
+- 写真：▲▲写真▲▲（見出しの直前に配置）
+- 有料区切り：==members_12=="""
+
+        user_message = f"""以下のマークダウン記事を修正してください。
+
+【現在のマークダウン】
+{markdown_text}
+
+---
+
+【修正リクエスト】
+{revision_request}
+
+---
+
+上記の修正リクエストに従って、マークダウンを修正してください。
+修正後のマークダウン全体を出力してください。説明は不要です。"""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=8000,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": user_message}
+            ]
+        )
+        
+        revised_markdown = message.content[0].text
+        
+        return {
+            'success': True,
+            'markdown': revised_markdown,
+            'error': None
+        }
+        
+    except anthropic.APIError as e:
+        return {
+            'success': False,
+            'markdown': '',
+            'error': f'Claude API エラー: {str(e)}'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'markdown': '',
+            'error': f'修正エラー: {str(e)}'
+        }
