@@ -1,7 +1,7 @@
 """
 日刊スポーツ マークダウン変換ツール
 Streamlit Community Cloud対応版
-テキスト直接入力対応
+テキスト直接入力・修正リクエスト機能対応
 """
 
 import streamlit as st
@@ -12,7 +12,7 @@ from pathlib import Path
 import hashlib
 
 from src.word_reader import extract_text_only
-from src.converter import convert_to_markdown, proofread_article
+from src.converter import convert_to_markdown, proofread_article, revise_markdown
 
 
 st.set_page_config(
@@ -103,6 +103,13 @@ def load_css():
             border-radius: 5px;
             margin-bottom: 1rem;
             text-align: center;
+        }
+        .revision-history {
+            background-color: #f8f9fa;
+            border-left: 3px solid #1e3a5f;
+            padding: 0.5rem 1rem;
+            margin: 0.5rem 0;
+            font-size: 0.9rem;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -227,6 +234,10 @@ def main_page():
         
         st.divider()
         convert_button = st.button("🔄 変換実行", type="primary", use_container_width=True)
+        
+        # 新規変換時は履歴をクリア
+        if convert_button:
+            st.session_state['revision_history'] = []
     
     with col2:
         st.subheader("📝 変換結果")
@@ -246,14 +257,10 @@ def main_page():
                         if result['success']:
                             st.success("✅ 変換完了")
                             
-                            st.text_area(
-                                "変換後のマークダウン",
-                                value=result['markdown'],
-                                height=400
-                            )
-                            
                             st.session_state['markdown_result'] = result['markdown']
                             st.session_state['original_filename'] = filename
+                            st.session_state['original_article'] = article_text
+                            st.session_state['revision_history'] = []
                             
                             if do_proofread:
                                 with st.spinner("校閲チェック中..."):
@@ -275,7 +282,64 @@ def main_page():
                     except Exception as e:
                         st.error(f"❌ エラーが発生しました: {str(e)}")
         
+        # 変換結果の表示
         if 'markdown_result' in st.session_state:
+            st.text_area(
+                "変換後のマークダウン",
+                value=st.session_state['markdown_result'],
+                height=400,
+                key="markdown_display"
+            )
+            
+            # 修正履歴の表示
+            if 'revision_history' in st.session_state and st.session_state['revision_history']:
+                with st.expander(f"📋 修正履歴（{len(st.session_state['revision_history'])}件）"):
+                    for i, revision in enumerate(st.session_state['revision_history'], 1):
+                        st.markdown(f'<div class="revision-history"><strong>修正{i}:</strong> {revision}</div>', unsafe_allow_html=True)
+            
+            st.divider()
+            
+            # 修正リクエスト機能
+            st.subheader("🔄 修正リクエスト")
+            
+            revision_request = st.text_area(
+                "修正したい内容を入力",
+                height=100,
+                placeholder="例：\n・3つ目の見出しを「新シーズンへの意気込み」に変えて\n・サマリーをもう少し短くして\n・最初の見出しの上に写真タグを追加して",
+                key="revision_input"
+            )
+            
+            revise_button = st.button("✏️ 修正を実行", use_container_width=True)
+            
+            if revise_button:
+                if not revision_request.strip():
+                    st.warning("⚠️ 修正内容を入力してください")
+                else:
+                    with st.spinner("修正中..."):
+                        try:
+                            revision_result = revise_markdown(
+                                markdown_text=st.session_state['markdown_result'],
+                                revision_request=revision_request,
+                                api_key=api_key
+                            )
+                            
+                            if revision_result['success']:
+                                st.success("✅ 修正完了")
+                                
+                                # 履歴に追加
+                                if 'revision_history' not in st.session_state:
+                                    st.session_state['revision_history'] = []
+                                st.session_state['revision_history'].append(revision_request)
+                                
+                                # 結果を更新
+                                st.session_state['markdown_result'] = revision_result['markdown']
+                                st.rerun()
+                            else:
+                                st.error(f"❌ 修正エラー: {revision_result['error']}")
+                                
+                        except Exception as e:
+                            st.error(f"❌ エラーが発生しました: {str(e)}")
+            
             st.divider()
             st.subheader("📥 ダウンロード")
             
@@ -308,7 +372,7 @@ def main_page():
                 st.text_area("校閲レポート", value=st.session_state['proofread_report'], height=300, disabled=True)
     
     st.divider()
-    st.markdown('<div style="text-align: center; color: #888;">日刊スポーツ マークダウン変換ツール v1.1 | 変換ルール ver.4 準拠</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align: center; color: #888;">日刊スポーツ マークダウン変換ツール v1.2 | 変換ルール ver.4 準拠</div>', unsafe_allow_html=True)
 
 
 def admin_page():
