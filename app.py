@@ -1,7 +1,7 @@
 """
 日刊スポーツ マークダウン変換ツール
 Streamlit Community Cloud対応版
-テキスト直接入力・修正リクエスト機能対応
+テキスト直接入力・修正リクエスト・クリア機能対応
 """
 
 import streamlit as st
@@ -81,6 +81,21 @@ def delete_user(username):
     if username in users and username != 'admin':
         del users[username]
         st.session_state['users_db'] = users
+
+
+def clear_workspace():
+    """作業スペースをクリアする"""
+    keys_to_clear = [
+        'markdown_result',
+        'original_filename',
+        'original_article',
+        'revision_history',
+        'proofread_report',
+        'article_input'
+    ]
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
 
 
 def load_css():
@@ -211,7 +226,9 @@ def main_page():
             article_text = st.text_area(
                 "原稿をコピー＆ペースト",
                 height=300,
-                placeholder="ここに記事の原稿を貼り付けてください..."
+                placeholder="ここに記事の原稿を貼り付けてください...",
+                key="article_input",
+                value=st.session_state.get('article_input', '')
             )
             filename = "direct_input"
         else:
@@ -233,7 +250,21 @@ def main_page():
         do_proofread = st.checkbox("校閲チェックを実行", value=True)
         
         st.divider()
-        convert_button = st.button("🔄 変換実行", type="primary", use_container_width=True)
+        
+        # ボタンを横並びに配置
+        col_btn1, col_btn2 = st.columns([2, 1])
+        
+        with col_btn1:
+            convert_button = st.button("🔄 変換実行", type="primary", use_container_width=True)
+        
+        with col_btn2:
+            clear_button = st.button("🗑️ クリア", use_container_width=True)
+        
+        # クリアボタンの処理
+        if clear_button:
+            clear_workspace()
+            st.success("✅ クリアしました")
+            st.rerun()
         
         # 新規変換時は履歴をクリア
         if convert_button:
