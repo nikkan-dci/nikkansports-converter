@@ -1,7 +1,7 @@
 """
 日刊スポーツ マークダウン変換ツール
 Streamlit Community Cloud対応版
-テキスト直接入力・修正リクエスト・クリア機能対応
+テキスト直接入力・修正リクエスト・クリア機能・機能一覧対応
 """
 
 import streamlit as st
@@ -130,6 +130,32 @@ def load_css():
     """, unsafe_allow_html=True)
 
 
+@st.dialog("📖 機能一覧")
+def show_features():
+    """機能一覧をポップアップ表示"""
+    st.markdown("""
+### 【変換機能】
+- Word / テキスト原稿をマークダウン形式に変換
+- テキストを直接コピー＆ペーストして変換
+
+### 【自動処理】
+- サマリーの「です・ます調」への自動変換
+- 見所3点（##mokuji-2##）の抽出
+- 中見出しの自動生成
+- 写真タグ（▲▲写真▲▲）の自動挿入
+- 有料区切り（==members_12==）の配置
+- 英数字の半角統一
+
+### 【修正・校閲】
+- 変換後の修正リクエスト（自然な言葉で依頼可）
+- 校閲チェック（誤字脱字・タグエラーの検出）
+
+### 【出力】
+- マークダウンのテキストファイル出力
+- 校閲レポートの出力
+    """)
+
+
 def login_page():
     st.markdown('<p class="main-header">📰 日刊スポーツ マークダウン変換ツール</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">ログインしてください</p>', unsafe_allow_html=True)
@@ -180,13 +206,16 @@ def main_page():
     with col_header2:
         st.markdown(f'<div class="user-info">👤 {st.session_state.get("user_name", "ユーザー")}</div>', unsafe_allow_html=True)
         
-        col_btn1, col_btn2 = st.columns(2)
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
         with col_btn1:
+            if st.button("📖 機能一覧", use_container_width=True):
+                show_features()
+        with col_btn2:
             if st.session_state.get('user_role') == 'admin':
                 if st.button("⚙️ 管理", use_container_width=True):
                     st.session_state['page'] = 'admin'
                     st.rerun()
-        with col_btn2:
+        with col_btn3:
             if st.button("🚪 ログアウト", use_container_width=True):
                 for key in list(st.session_state.keys()):
                     if key != 'users_db':
@@ -403,7 +432,7 @@ def main_page():
                 st.text_area("校閲レポート", value=st.session_state['proofread_report'], height=300, disabled=True)
     
     st.divider()
-    st.markdown('<div style="text-align: center; color: #888;">日刊スポーツ マークダウン変換ツール v1.2 | 変換ルール ver.4 準拠</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align: center; color: #888;">日刊スポーツ マークダウン変換ツール v1.3 | 変換ルール ver.4 準拠</div>', unsafe_allow_html=True)
 
 
 def admin_page():
