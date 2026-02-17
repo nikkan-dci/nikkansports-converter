@@ -63,12 +63,12 @@ def convert_to_markdown(article_text: str, api_key: str) -> str:
     return message.content[0].text
 
 
-def convert_to_qa(transcript_text: str, api_key: str) -> str:
+def convert_to_qa(article_text: str, api_key: str) -> str:
     """
     音声文字起こしテキストを一問一答形式に変換する
     
     Args:
-        transcript_text: 変換する文字起こしテキスト
+        article_text: 変換する文字起こしテキスト
         api_key: Anthropic APIキー
     
     Returns:
@@ -90,7 +90,7 @@ def convert_to_qa(transcript_text: str, api_key: str) -> str:
 {qa_rules}
 
 【変換する文字起こし】
-{transcript_text}
+{article_text}
 
 変換後の一問一答形式のみを出力してください。説明は不要です。"""
             }
