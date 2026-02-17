@@ -1,466 +1,269 @@
+# -*- coding: utf-8 -*-
 """
-Claude APIを使用したマークダウン変換・一問一答変換モジュール
+日刊スポーツ記事変換モジュール
+マークダウン変換と一問一答変換の両方に対応
 """
 
 import anthropic
 import os
-from pathlib import Path
 
 
-def load_conversion_prompt() -> str:
-    """マークダウン変換プロンプトを読み込む"""
-    prompt_path = Path(__file__).parent.parent / 'prompts' / 'conversion_prompt.txt'
-    
-    if prompt_path.exists():
-        return prompt_path.read_text(encoding='utf-8')
-    else:
-        raise FileNotFoundError(f"変換プロンプトが見つかりません: {prompt_path}")
+def load_conversion_prompt():
+    """マークダウン変換用プロンプトを読み込む"""
+    prompt_path = "prompts/conversion_prompt.txt"
+    if os.path.exists(prompt_path):
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
 
 
-def load_qa_prompt() -> str:
-    """一問一答変換プロンプトを読み込む"""
-    prompt_path = Path(__file__).parent.parent / 'prompts' / 'qa_prompt.txt'
-    
-    if prompt_path.exists():
-        return prompt_path.read_text(encoding='utf-8')
-    else:
-        raise FileNotFoundError(f"一問一答プロンプトが見つかりません: {prompt_path}")
+def load_qa_prompt():
+    """一問一答変換用プロンプトを読み込む"""
+    prompt_path = "prompts/qa_prompt.txt"
+    if os.path.exists(prompt_path):
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
 
 
-def convert_to_markdown(
-    article_text: str,
-    reporter_name: str = "",
-    api_key: str = None,
-) -> dict:
+def convert_to_markdown(article_text: str, api_key: str) -> str:
     """
-    記事テキストをマークダウン形式に変換
+    記事テキストをマークダウン形式に変換する
+    
+    Args:
+        article_text: 変換する記事テキスト
+        api_key: Anthropic APIキー
+    
+    Returns:
+        マークダウン形式に変換されたテキスト
     """
-    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+    client = anthropic.Anthropic(api_key=api_key)
     
-    if not api_key:
-        return {
-            'success': False,
-            'markdown': '',
-            'error': 'ANTHROPIC_API_KEYが設定されていません'
-        }
+    conversion_rules = load_conversion_prompt()
     
-    try:
-        system_prompt = load_conversion_prompt()
-        
-        user_message = f"""以下のWord原稿をマークダウン形式に変換してください。
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""以下の変換ルールに従って、記事をマークダウン形式に変換してください。
 
-【記者名】
-{reporter_name if reporter_name else "（指定なし）"}
+【変換ルール】
+{conversion_rules}
 
-【原稿】
+【変換する記事】
 {article_text}
 
----
-
-上記の原稿を、指示されたルールに従ってマークダウン形式に変換してください。
-変換後のマークダウンのみを出力し、説明は不要です。"""
-
-        client = anthropic.Anthropic(api_key=api_key)
-        
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8000,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_message}
-            ]
-        )
-        
-        markdown_result = message.content[0].text
-        
-        return {
-            'success': True,
-            'markdown': markdown_result,
-            'error': None
-        }
-        
-    except anthropic.APIError as e:
-        return {
-            'success': False,
-            'markdown': '',
-            'error': f'Claude API エラー: {str(e)}'
-        }
-    except Exception as e:
-        return {
-            'success': False,
-            'markdown': '',
-            'error': f'変換エラー: {str(e)}'
-        }
-
-
-def convert_to_qa(
-    article_text: str,
-    api_key: str = None,
-) -> dict:
-    """
-    音声文字起こしを一問一答形式に変換
-    """
-    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+変換後のマークダウンのみを出力してください。説明は不要です。"""
+            }
+        ]
+    )
     
-    if not api_key:
-        return {
-            'success': False,
-            'qa_text': '',
-            'error': 'ANTHROPIC_API_KEYが設定されていません'
-        }
-    
-    try:
-        system_prompt = load_qa_prompt()
-        
-        user_message = f"""以下の音声文字起こしを一問一答形式に変換してください。
-
-【原稿】
-{article_text}
-
----
-
-上記の原稿を、指示されたルールに従って一問一答形式に変換してください。
-変換後のテキストのみを出力し、説明は不要です。"""
-
-        client = anthropic.Anthropic(api_key=api_key)
-        
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8000,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_message}
-            ]
-        )
-        
-        qa_result = message.content[0].text
-        
-        return {
-            'success': True,
-            'qa_text': qa_result,
-            'error': None
-        }
-        
-    except anthropic.APIError as e:
-        return {
-            'success': False,
-            'qa_text': '',
-            'error': f'Claude API エラー: {str(e)}'
-        }
-    except Exception as e:
-        return {
-            'success': False,
-            'qa_text': '',
-            'error': f'変換エラー: {str(e)}'
-        }
+    return message.content[0].text
 
 
-def proofread_article(
-    markdown_text: str,
-    api_key: str = None,
-) -> dict:
+def convert_to_qa(transcript_text: str, api_key: str) -> str:
     """
-    マークダウン記事の校閲チェック
+    音声文字起こしテキストを一問一答形式に変換する
+    
+    Args:
+        transcript_text: 変換する文字起こしテキスト
+        api_key: Anthropic APIキー
+    
+    Returns:
+        一問一答形式に変換されたテキスト
     """
-    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+    client = anthropic.Anthropic(api_key=api_key)
     
-    if not api_key:
-        return {
-            'success': False,
-            'report': '',
-            'issues_count': 0,
-            'error': 'ANTHROPIC_API_KEYが設定されていません'
-        }
+    qa_rules = load_qa_prompt()
     
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        
-        system_prompt = """あなたは日本語の校閲専門家です。
-記事の校閲チェックを行い、以下の項目を確認してください：
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""以下の変換ルールに従って、音声文字起こしを一問一答形式に変換してください。
 
+【変換ルール】
+{qa_rules}
+
+【変換する文字起こし】
+{transcript_text}
+
+変換後の一問一答形式のみを出力してください。説明は不要です。"""
+            }
+        ]
+    )
+    
+    return message.content[0].text
+
+
+def proofread_article(converted_text: str, api_key: str) -> str:
+    """
+    マークダウン変換後の記事を校閲する
+    
+    Args:
+        converted_text: 校閲する変換済みテキスト
+        api_key: Anthropic APIキー
+    
+    Returns:
+        校閲結果（指摘箇所のみ）
+    """
+    client = anthropic.Anthropic(api_key=api_key)
+    
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4096,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""以下のマークダウン変換済み記事を校閲してください。
+
+【校閲チェック項目】
 1. 誤字・脱字
-2. 漢字の誤用（同音異義語の誤り）
+2. 漢字の誤用（同音異義語の誤りなど）
 3. 送り仮名の揺れ
 4. 全角英数字（半角に統一すべき箇所）
-5. タグの閉じ忘れ（##タグ## と #### の対応）
-6. 見出しの問題（同じパターンの連続、段落冒頭のコピー）
+5. タグの閉じ忘れ（####の不足など）
+6. 見出しの問題（500文字ルール違反、パターンの連続など）
 
 【重要】
-- 原文は修正せず、指摘のみを行う
-- 指摘は「（校閲：●●）」の形式で記載
-- 問題がない場合は「校閲チェック完了：問題なし」と報告"""
+- 原文は絶対にそのまま残す
+- 指摘箇所の直後に (校閲:●●) を追加するのみ
+- 問題がない場合は「校閲チェック完了：問題は見つかりませんでした」と出力
 
-        user_message = f"""以下のマークダウン記事を校閲チェックしてください。
+【校閲する記事】
+{converted_text}
 
-{markdown_text}
-
----
-
-校閲レポートを作成してください。
-指摘がある場合は、該当箇所と指摘内容を明記してください。"""
-
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_message}
-            ]
-        )
-        
-        report = message.content[0].text
-        issues_count = report.count('校閲：') + report.count('指摘')
-        
-        return {
-            'success': True,
-            'report': report,
-            'issues_count': issues_count,
-            'error': None
-        }
-        
-    except Exception as e:
-        return {
-            'success': False,
-            'report': '',
-            'issues_count': 0,
-            'error': f'校閲エラー: {str(e)}'
-        }
-
-
-def proofread_qa(
-    qa_text: str,
-    api_key: str = None,
-) -> dict:
-    """
-    一問一答形式の校閲チェック
-    """
-    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+校閲結果を出力してください。"""
+            }
+        ]
+    )
     
-    if not api_key:
-        return {
-            'success': False,
-            'report': '',
-            'issues_count': 0,
-            'error': 'ANTHROPIC_API_KEYが設定されていません'
-        }
-    
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        
-        system_prompt = """あなたは日本語の校閲専門家です。
-一問一答形式の記事の校閲チェックを行い、以下の項目を確認してください：
+    return message.content[0].text
 
+
+def proofread_qa(converted_text: str, api_key: str) -> str:
+    """
+    一問一答変換後のテキストを校閲する
+    
+    Args:
+        converted_text: 校閲する変換済みテキスト
+        api_key: Anthropic APIキー
+    
+    Returns:
+        校閲結果（指摘箇所のみ）
+    """
+    client = anthropic.Anthropic(api_key=api_key)
+    
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4096,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""以下の一問一答変換済みテキストを校閲してください。
+
+【校閲チェック項目】
 1. 誤字・脱字
-   - 文字の抜け、余分な文字、タイプミス
-
-2. 漢字の誤用
-   - 「捕る」「獲る」「取る」など同音異義語の誤り
-   - 文脈に合わない漢字の使用
-
+2. 漢字の誤用（同音異義語の誤りなど）
 3. 送り仮名の揺れ
-   - 「行う」「行なう」、「受け取る」「受取る」など
-   - 記事内での統一性を確認
 
 【重要】
-- 原文は絶対にそのまま残し、指摘箇所の直後に「（校閲：●●）」を追加するのみ
-- 誤字を正しい文字に置き換えることは禁止
-- 問題がない場合は「校閲チェック完了：問題なし」と報告"""
+- 原文は絶対にそのまま残す
+- 指摘箇所の直後に (校閲:●●) を追加するのみ
+- 問題がない場合は「校閲チェック完了：問題は見つかりませんでした」と出力
 
-        user_message = f"""以下の一問一答形式の記事を校閲チェックしてください。
+【校閲するテキスト】
+{converted_text}
 
-{qa_text}
-
----
-
-校閲レポートを作成してください。
-指摘がある場合は、該当箇所と指摘内容を明記してください。"""
-
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_message}
-            ]
-        )
-        
-        report = message.content[0].text
-        issues_count = report.count('校閲：') + report.count('指摘')
-        
-        return {
-            'success': True,
-            'report': report,
-            'issues_count': issues_count,
-            'error': None
-        }
-        
-    except Exception as e:
-        return {
-            'success': False,
-            'report': '',
-            'issues_count': 0,
-            'error': f'校閲エラー: {str(e)}'
-        }
-
-
-def revise_markdown(
-    markdown_text: str,
-    revision_request: str,
-    api_key: str = None,
-) -> dict:
-    """
-    マークダウン記事を修正リクエストに基づいて修正
-    """
-    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+校閲結果を出力してください。"""
+            }
+        ]
+    )
     
-    if not api_key:
-        return {
-            'success': False,
-            'markdown': '',
-            'error': 'ANTHROPIC_API_KEYが設定されていません'
-        }
+    return message.content[0].text
+
+
+def revise_article(converted_text: str, revision_request: str, api_key: str) -> str:
+    """
+    マークダウン変換後の記事に修正リクエストを適用する
     
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        
-        system_prompt = """あなたは日刊スポーツのマークダウン記事を編集するエディターです。
+    Args:
+        converted_text: 修正する変換済みテキスト
+        revision_request: 修正リクエスト内容
+        api_key: Anthropic APIキー
+    
+    Returns:
+        修正後のテキスト
+    """
+    client = anthropic.Anthropic(api_key=api_key)
+    
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""以下のマークダウン変換済み記事に対して、修正リクエストを適用してください。
 
-ユーザーから修正リクエストを受け取り、既存のマークダウン記事を修正してください。
-
-【重要なルール】
-1. 修正リクエストで指示された箇所のみを修正する
-2. 指示されていない部分は一切変更しない
-3. マークダウンのタグ形式（##head##、####など）は維持する
-4. 修正後のマークダウン全体を出力する
-5. 説明は不要、マークダウンのみを出力する
-
-【タグ形式のルール】
-- 中見出し：##head##（改行）見出しテキスト（改行）####
-- サマリー：##intro##（改行）テキスト（改行）####
-- 引用：##quoto##（改行）テキスト（改行）####
-- 見所：##mokuji-2##★見出し##（改行）|項目|（改行）####
-- 略歴：##comment##（改行）テキスト（改行）####
-- 写真：▲▲写真▲▲（見出しの直前に配置）
-- 有料区切り：==members_12=="""
-
-        user_message = f"""以下のマークダウン記事を修正してください。
-
-【現在のマークダウン】
-{markdown_text}
-
----
+【現在の記事】
+{converted_text}
 
 【修正リクエスト】
 {revision_request}
 
----
+【重要】
+- 修正リクエストに該当する箇所のみを修正
+- それ以外の部分は変更しない
+- 原稿本文の内容（発言内容など）は絶対に修正しない
 
-上記の修正リクエストに従って、マークダウンを修正してください。
-修正後のマークダウン全体を出力してください。説明は不要です。"""
-
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8000,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_message}
-            ]
-        )
-        
-        revised_markdown = message.content[0].text
-        
-        return {
-            'success': True,
-            'markdown': revised_markdown,
-            'error': None
-        }
-        
-    except anthropic.APIError as e:
-        return {
-            'success': False,
-            'markdown': '',
-            'error': f'Claude API エラー: {str(e)}'
-        }
-    except Exception as e:
-        return {
-            'success': False,
-            'markdown': '',
-            'error': f'修正エラー: {str(e)}'
-        }
-
-
-def revise_qa(
-    qa_text: str,
-    revision_request: str,
-    api_key: str = None,
-) -> dict:
-    """
-    一問一答形式を修正リクエストに基づいて修正
-    """
-    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+修正後の全文を出力してください。説明は不要です。"""
+            }
+        ]
+    )
     
-    if not api_key:
-        return {
-            'success': False,
-            'qa_text': '',
-            'error': 'ANTHROPIC_API_KEYが設定されていません'
-        }
+    return message.content[0].text
+
+
+def revise_qa(converted_text: str, revision_request: str, api_key: str) -> str:
+    """
+    一問一答変換後のテキストに修正リクエストを適用する
     
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        
-        system_prompt = """あなたは日刊スポーツの一問一答形式の記事を編集するエディターです。
+    Args:
+        converted_text: 修正する変換済みテキスト
+        revision_request: 修正リクエスト内容
+        api_key: Anthropic APIキー
+    
+    Returns:
+        修正後のテキスト
+    """
+    client = anthropic.Anthropic(api_key=api_key)
+    
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""以下の一問一答変換済みテキストに対して、修正リクエストを適用してください。
 
-ユーザーから修正リクエストを受け取り、既存の一問一答形式の記事を修正してください。
-
-【重要なルール】
-1. 修正リクエストで指示された箇所のみを修正する
-2. 指示されていない部分は一切変更しない
-3. 一問一答の形式（―質問 回答）は維持する
-4. 修正後の一問一答全体を出力する
-5. 説明は不要、一問一答のテキストのみを出力する"""
-
-        user_message = f"""以下の一問一答形式の記事を修正してください。
-
-【現在の一問一答】
-{qa_text}
-
----
+【現在のテキスト】
+{converted_text}
 
 【修正リクエスト】
 {revision_request}
 
----
+【重要】
+- 修正リクエストに該当する箇所のみを修正
+- それ以外の部分は変更しない
+- 回答部分の発言内容は絶対に修正しない
 
-上記の修正リクエストに従って、一問一答を修正してください。
-修正後の一問一答全体を出力してください。説明は不要です。"""
-
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8000,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_message}
-            ]
-        )
-        
-        revised_qa = message.content[0].text
-        
-        return {
-            'success': True,
-            'qa_text': revised_qa,
-            'error': None
-        }
-        
-    except anthropic.APIError as e:
-        return {
-            'success': False,
-            'qa_text': '',
-            'error': f'Claude API エラー: {str(e)}'
-        }
-    except Exception as e:
-        return {
-            'success': False,
-            'qa_text': '',
-            'error': f'修正エラー: {str(e)}'
-        }
+修正後の全文を出力してください。説明は不要です。"""
+            }
+        ]
+    )
+    
+    return message.content[0].text
