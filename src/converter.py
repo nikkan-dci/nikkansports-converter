@@ -187,7 +187,7 @@ def proofread_qa(converted_text: str, api_key: str) -> str:
     return message.content[0].text
 
 
-def revise_article(converted_text: str, revision_request: str, api_key: str) -> str:
+def revise_markdown(converted_text: str, revision_request: str, api_key: str) -> str:
     """
     マークダウン変換後の記事に修正リクエストを適用する
     
