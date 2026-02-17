@@ -1,7 +1,7 @@
 """
-日刊スポーツ マークダウン変換ツール
+日刊スポーツ 変換ツール
 Streamlit Community Cloud対応版
-テキスト直接入力・修正リクエスト・クリア機能・機能一覧対応
+マークダウン変換・一問一答変換対応
 """
 
 import streamlit as st
@@ -12,11 +12,18 @@ from pathlib import Path
 import hashlib
 
 from src.word_reader import extract_text_only
-from src.converter import convert_to_markdown, proofread_article, revise_markdown
+from src.converter import (
+    convert_to_markdown, 
+    convert_to_qa,
+    proofread_article, 
+    proofread_qa,
+    revise_markdown,
+    revise_qa
+)
 
 
 st.set_page_config(
-    page_title="日刊スポーツ マークダウン変換ツール",
+    page_title="日刊スポーツ 変換ツール",
     page_icon="📰",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -87,6 +94,7 @@ def clear_workspace():
     """作業スペースをクリアする"""
     keys_to_clear = [
         'markdown_result',
+        'qa_result',
         'original_filename',
         'original_article',
         'revision_history',
@@ -134,11 +142,8 @@ def load_css():
 def show_features():
     """機能一覧をポップアップ表示"""
     st.markdown("""
-### 【変換機能】
+### 【📝 マークダウン変換】
 - Word / テキスト原稿をマークダウン形式に変換
-- テキストを直接コピー＆ペーストして変換
-
-### 【自動処理】
 - サマリーの「です・ます調」への自動変換
 - 見所3点（##mokuji-2##）の抽出
 - 中見出しの自動生成
@@ -146,18 +151,20 @@ def show_features():
 - 有料区切り（==members_12==）の配置
 - 英数字の半角統一
 
-### 【修正・校閲】
-- 変換後の修正リクエスト（自然な言葉で依頼可）
-- 校閲チェック（誤字脱字・タグエラーの検出）
+### 【💬 一問一答変換】
+- 音声文字起こしを一問一答形式に変換
+- 質問部分の敬体→常体変換
+- フィラー・表記の自動調整
 
-### 【出力】
-- マークダウンのテキストファイル出力
-- 校閲レポートの出力
+### 【共通機能】
+- 変換後の修正リクエスト（自然な言葉で依頼可）
+- 校閲チェック（誤字脱字の検出）
+- テキストファイル出力
     """)
 
 
 def login_page():
-    st.markdown('<p class="main-header">📰 日刊スポーツ マークダウン変換ツール</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">📰 日刊スポーツ 変換ツール</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">ログインしてください</p>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -197,11 +204,12 @@ def login_page():
 def main_page():
     config = load_config()
     
+    # ヘッダー
     col_header1, col_header2 = st.columns([3, 1])
     
     with col_header1:
-        st.markdown('<p class="main-header">📰 日刊スポーツ マークダウン変換ツール</p>', unsafe_allow_html=True)
-        st.markdown('<p class="sub-header">原稿を日刊スポーツ規定のマークダウン形式に変換します</p>', unsafe_allow_html=True)
+        st.markdown('<p class="main-header">📰 日刊スポーツ 変換ツール</p>', unsafe_allow_html=True)
+        st.markdown('<p class="sub-header">原稿を指定の形式に変換します</p>', unsafe_allow_html=True)
     
     with col_header2:
         st.markdown(f'<div class="user-info">👤 {st.session_state.get("user_name", "ユーザー")}</div>', unsafe_allow_html=True)
@@ -237,6 +245,24 @@ def main_page():
     
     st.divider()
     
+    # タブ切り替え
+    tab1, tab2 = st.tabs(["📝 マークダウン変換", "💬 一問一答変換"])
+    
+    # マークダウン変換タブ
+    with tab1:
+        markdown_tab(api_key)
+    
+    # 一問一答変換タブ
+    with tab2:
+        qa_tab(api_key)
+    
+    # フッター
+    st.divider()
+    st.markdown('<div style="text-align: center; color: #888;">日刊スポーツ 変換ツール v2.0</div>', unsafe_allow_html=True)
+
+
+def markdown_tab(api_key):
+    """マークダウン変換タブの内容"""
     col1, col2 = st.columns([1, 1])
     
     with col1:
@@ -245,7 +271,8 @@ def main_page():
         input_method = st.radio(
             "入力方法を選択",
             ["テキストを直接入力", "ファイルをアップロード"],
-            horizontal=True
+            horizontal=True,
+            key="md_input_method"
         )
         
         article_text = ""
@@ -256,15 +283,15 @@ def main_page():
                 "原稿をコピー＆ペースト",
                 height=300,
                 placeholder="ここに記事の原稿を貼り付けてください...",
-                key="article_input",
-                value=st.session_state.get('article_input', '')
+                key="md_article_input"
             )
-            filename = "direct_input"
+            filename = "markdown"
         else:
             uploaded_file = st.file_uploader(
                 "原稿ファイルをドラッグ＆ドロップ、またはクリックして選択",
                 type=['docx', 'txt'],
-                help="Word形式（.docx）またはテキスト形式（.txt）に対応"
+                help="Word形式（.docx）またはテキスト形式（.txt）に対応",
+                key="md_file_upload"
             )
             if uploaded_file is not None:
                 file_bytes = uploaded_file.read()
@@ -274,28 +301,25 @@ def main_page():
         
         st.subheader("⚙️ 設定（任意）")
         
-        reporter_name = st.text_input("記者名", placeholder="例：山田太郎")
+        reporter_name = st.text_input("記者名", placeholder="例：山田太郎", key="md_reporter")
         
-        do_proofread = st.checkbox("校閲チェックを実行", value=True)
+        do_proofread = st.checkbox("校閲チェックを実行", value=True, key="md_proofread")
         
         st.divider()
         
-        # ボタンを横並びに配置
         col_btn1, col_btn2 = st.columns([2, 1])
         
         with col_btn1:
-            convert_button = st.button("🔄 変換実行", type="primary", use_container_width=True)
+            convert_button = st.button("🔄 変換実行", type="primary", use_container_width=True, key="md_convert")
         
         with col_btn2:
-            clear_button = st.button("🗑️ クリア", use_container_width=True)
+            clear_button = st.button("🗑️ クリア", use_container_width=True, key="md_clear")
         
-        # クリアボタンの処理
         if clear_button:
             clear_workspace()
             st.success("✅ クリアしました")
             st.rerun()
         
-        # 新規変換時は履歴をクリア
         if convert_button:
             st.session_state['revision_history'] = []
     
@@ -348,7 +372,7 @@ def main_page():
                 "変換後のマークダウン",
                 value=st.session_state['markdown_result'],
                 height=400,
-                key="markdown_display"
+                key="md_display"
             )
             
             # 修正履歴の表示
@@ -365,11 +389,11 @@ def main_page():
             revision_request = st.text_area(
                 "修正したい内容を入力",
                 height=100,
-                placeholder="例：\n・3つ目の見出しを「新シーズンへの意気込み」に変えて\n・サマリーをもう少し短くして\n・最初の見出しの上に写真タグを追加して",
-                key="revision_input"
+                placeholder="例：\n・3つ目の見出しを「新シーズンへの意気込み」に変えて\n・サマリーをもう少し短くして",
+                key="md_revision_input"
             )
             
-            revise_button = st.button("✏️ 修正を実行", use_container_width=True)
+            revise_button = st.button("✏️ 修正を実行", use_container_width=True, key="md_revise")
             
             if revise_button:
                 if not revision_request.strip():
@@ -386,12 +410,10 @@ def main_page():
                             if revision_result['success']:
                                 st.success("✅ 修正完了")
                                 
-                                # 履歴に追加
                                 if 'revision_history' not in st.session_state:
                                     st.session_state['revision_history'] = []
                                 st.session_state['revision_history'].append(revision_request)
                                 
-                                # 結果を更新
                                 st.session_state['markdown_result'] = revision_result['markdown']
                                 st.rerun()
                             else:
@@ -414,7 +436,8 @@ def main_page():
                     data=st.session_state['markdown_result'],
                     file_name=f"{base_name}_{timestamp}.txt",
                     mime="text/plain",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="md_download"
                 )
             
             with col_dl2:
@@ -424,15 +447,202 @@ def main_page():
                         data=st.session_state['proofread_report'],
                         file_name=f"{base_name}_校閲レポート_{timestamp}.txt",
                         mime="text/plain",
-                        use_container_width=True
+                        use_container_width=True,
+                        key="md_proofread_download"
                     )
         
         if 'proofread_report' in st.session_state:
             with st.expander("📋 校閲レポートを表示"):
-                st.text_area("校閲レポート", value=st.session_state['proofread_report'], height=300, disabled=True)
+                st.text_area("校閲レポート", value=st.session_state['proofread_report'], height=300, disabled=True, key="md_proofread_display")
+
+
+def qa_tab(api_key):
+    """一問一答変換タブの内容"""
+    col1, col2 = st.columns([1, 1])
     
-    st.divider()
-    st.markdown('<div style="text-align: center; color: #888;">日刊スポーツ マークダウン変換ツール v1.3 | 変換ルール ver.4 準拠</div>', unsafe_allow_html=True)
+    with col1:
+        st.subheader("📄 原稿を入力")
+        
+        input_method = st.radio(
+            "入力方法を選択",
+            ["テキストを直接入力", "ファイルをアップロード"],
+            horizontal=True,
+            key="qa_input_method"
+        )
+        
+        article_text = ""
+        filename = "qa"
+        
+        if input_method == "テキストを直接入力":
+            article_text = st.text_area(
+                "音声文字起こしをコピー＆ペースト",
+                height=300,
+                placeholder="ここに音声文字起こしを貼り付けてください...",
+                key="qa_article_input"
+            )
+            filename = "qa"
+        else:
+            uploaded_file = st.file_uploader(
+                "原稿ファイルをドラッグ＆ドロップ、またはクリックして選択",
+                type=['docx', 'txt'],
+                help="Word形式（.docx）またはテキスト形式（.txt）に対応",
+                key="qa_file_upload"
+            )
+            if uploaded_file is not None:
+                file_bytes = uploaded_file.read()
+                file_type = "txt" if uploaded_file.name.endswith('.txt') else "docx"
+                article_text = extract_text_only(file_bytes, file_type)
+                filename = uploaded_file.name.rsplit('.', 1)[0]
+        
+        do_proofread = st.checkbox("校閲チェックを実行", value=True, key="qa_proofread")
+        
+        st.divider()
+        
+        col_btn1, col_btn2 = st.columns([2, 1])
+        
+        with col_btn1:
+            convert_button = st.button("🔄 変換実行", type="primary", use_container_width=True, key="qa_convert")
+        
+        with col_btn2:
+            clear_button = st.button("🗑️ クリア", use_container_width=True, key="qa_clear")
+        
+        if clear_button:
+            clear_workspace()
+            st.success("✅ クリアしました")
+            st.rerun()
+        
+        if convert_button:
+            st.session_state['qa_revision_history'] = []
+    
+    with col2:
+        st.subheader("📝 変換結果")
+        
+        if convert_button:
+            if not article_text.strip():
+                st.warning("⚠️ 原稿を入力またはアップロードしてください")
+            else:
+                with st.spinner("変換中...（30秒〜1分程度）"):
+                    try:
+                        result = convert_to_qa(
+                            article_text=article_text,
+                            api_key=api_key
+                        )
+                        
+                        if result['success']:
+                            st.success("✅ 変換完了")
+                            
+                            st.session_state['qa_result'] = result['qa_text']
+                            st.session_state['qa_filename'] = filename
+                            st.session_state['qa_revision_history'] = []
+                            
+                            if do_proofread:
+                                with st.spinner("校閲チェック中..."):
+                                    proofread_result = proofread_qa(
+                                        qa_text=result['qa_text'],
+                                        api_key=api_key
+                                    )
+                                    
+                                    if proofread_result['success']:
+                                        st.session_state['qa_proofread_report'] = proofread_result['report']
+                                        
+                                        if proofread_result['issues_count'] > 0:
+                                            st.warning(f"⚠️ 校閲で {proofread_result['issues_count']} 件の指摘があります")
+                                        else:
+                                            st.info("ℹ️ 校閲チェック完了：問題なし")
+                        else:
+                            st.error(f"❌ 変換エラー: {result['error']}")
+                            
+                    except Exception as e:
+                        st.error(f"❌ エラーが発生しました: {str(e)}")
+        
+        # 変換結果の表示
+        if 'qa_result' in st.session_state:
+            st.text_area(
+                "変換後の一問一答",
+                value=st.session_state['qa_result'],
+                height=400,
+                key="qa_display"
+            )
+            
+            # 修正履歴の表示
+            if 'qa_revision_history' in st.session_state and st.session_state['qa_revision_history']:
+                with st.expander(f"📋 修正履歴（{len(st.session_state['qa_revision_history'])}件）"):
+                    for i, revision in enumerate(st.session_state['qa_revision_history'], 1):
+                        st.markdown(f'<div class="revision-history"><strong>修正{i}:</strong> {revision}</div>', unsafe_allow_html=True)
+            
+            st.divider()
+            
+            # 修正リクエスト機能
+            st.subheader("🔄 修正リクエスト")
+            
+            revision_request = st.text_area(
+                "修正したい内容を入力",
+                height=100,
+                placeholder="例：\n・3つ目の質問を削除して\n・回答の表記を修正して",
+                key="qa_revision_input"
+            )
+            
+            revise_button = st.button("✏️ 修正を実行", use_container_width=True, key="qa_revise")
+            
+            if revise_button:
+                if not revision_request.strip():
+                    st.warning("⚠️ 修正内容を入力してください")
+                else:
+                    with st.spinner("修正中..."):
+                        try:
+                            revision_result = revise_qa(
+                                qa_text=st.session_state['qa_result'],
+                                revision_request=revision_request,
+                                api_key=api_key
+                            )
+                            
+                            if revision_result['success']:
+                                st.success("✅ 修正完了")
+                                
+                                if 'qa_revision_history' not in st.session_state:
+                                    st.session_state['qa_revision_history'] = []
+                                st.session_state['qa_revision_history'].append(revision_request)
+                                
+                                st.session_state['qa_result'] = revision_result['qa_text']
+                                st.rerun()
+                            else:
+                                st.error(f"❌ 修正エラー: {revision_result['error']}")
+                                
+                        except Exception as e:
+                            st.error(f"❌ エラーが発生しました: {str(e)}")
+            
+            st.divider()
+            st.subheader("📥 ダウンロード")
+            
+            base_name = st.session_state.get('qa_filename', 'qa')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+            
+            col_dl1, col_dl2 = st.columns(2)
+            
+            with col_dl1:
+                st.download_button(
+                    label="📄 一問一答.txt",
+                    data=st.session_state['qa_result'],
+                    file_name=f"{base_name}_{timestamp}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key="qa_download"
+                )
+            
+            with col_dl2:
+                if 'qa_proofread_report' in st.session_state:
+                    st.download_button(
+                        label="📋 校閲レポート.txt",
+                        data=st.session_state['qa_proofread_report'],
+                        file_name=f"{base_name}_校閲レポート_{timestamp}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key="qa_proofread_download"
+                    )
+        
+        if 'qa_proofread_report' in st.session_state:
+            with st.expander("📋 校閲レポートを表示"):
+                st.text_area("校閲レポート", value=st.session_state['qa_proofread_report'], height=300, disabled=True, key="qa_proofread_display")
 
 
 def admin_page():
