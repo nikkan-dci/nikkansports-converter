@@ -1,5 +1,5 @@
 """
-Claude APIを使用したマークダウン変換モジュール
+Claude APIを使用したマークダウン変換・一問一答変換モジュール
 """
 
 import anthropic
@@ -8,13 +8,23 @@ from pathlib import Path
 
 
 def load_conversion_prompt() -> str:
-    """変換プロンプトを読み込む"""
+    """マークダウン変換プロンプトを読み込む"""
     prompt_path = Path(__file__).parent.parent / 'prompts' / 'conversion_prompt.txt'
     
     if prompt_path.exists():
         return prompt_path.read_text(encoding='utf-8')
     else:
         raise FileNotFoundError(f"変換プロンプトが見つかりません: {prompt_path}")
+
+
+def load_qa_prompt() -> str:
+    """一問一答変換プロンプトを読み込む"""
+    prompt_path = Path(__file__).parent.parent / 'prompts' / 'qa_prompt.txt'
+    
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding='utf-8')
+    else:
+        raise FileNotFoundError(f"一問一答プロンプトが見つかりません: {prompt_path}")
 
 
 def convert_to_markdown(
@@ -83,6 +93,68 @@ def convert_to_markdown(
         }
 
 
+def convert_to_qa(
+    article_text: str,
+    api_key: str = None,
+) -> dict:
+    """
+    音声文字起こしを一問一答形式に変換
+    """
+    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+    
+    if not api_key:
+        return {
+            'success': False,
+            'qa_text': '',
+            'error': 'ANTHROPIC_API_KEYが設定されていません'
+        }
+    
+    try:
+        system_prompt = load_qa_prompt()
+        
+        user_message = f"""以下の音声文字起こしを一問一答形式に変換してください。
+
+【原稿】
+{article_text}
+
+---
+
+上記の原稿を、指示されたルールに従って一問一答形式に変換してください。
+変換後のテキストのみを出力し、説明は不要です。"""
+
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=8000,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": user_message}
+            ]
+        )
+        
+        qa_result = message.content[0].text
+        
+        return {
+            'success': True,
+            'qa_text': qa_result,
+            'error': None
+        }
+        
+    except anthropic.APIError as e:
+        return {
+            'success': False,
+            'qa_text': '',
+            'error': f'Claude API エラー: {str(e)}'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'qa_text': '',
+            'error': f'変換エラー: {str(e)}'
+        }
+
+
 def proofread_article(
     markdown_text: str,
     api_key: str = None,
@@ -121,6 +193,82 @@ def proofread_article(
         user_message = f"""以下のマークダウン記事を校閲チェックしてください。
 
 {markdown_text}
+
+---
+
+校閲レポートを作成してください。
+指摘がある場合は、該当箇所と指摘内容を明記してください。"""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": user_message}
+            ]
+        )
+        
+        report = message.content[0].text
+        issues_count = report.count('校閲：') + report.count('指摘')
+        
+        return {
+            'success': True,
+            'report': report,
+            'issues_count': issues_count,
+            'error': None
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'report': '',
+            'issues_count': 0,
+            'error': f'校閲エラー: {str(e)}'
+        }
+
+
+def proofread_qa(
+    qa_text: str,
+    api_key: str = None,
+) -> dict:
+    """
+    一問一答形式の校閲チェック
+    """
+    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+    
+    if not api_key:
+        return {
+            'success': False,
+            'report': '',
+            'issues_count': 0,
+            'error': 'ANTHROPIC_API_KEYが設定されていません'
+        }
+    
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        system_prompt = """あなたは日本語の校閲専門家です。
+一問一答形式の記事の校閲チェックを行い、以下の項目を確認してください：
+
+1. 誤字・脱字
+   - 文字の抜け、余分な文字、タイプミス
+
+2. 漢字の誤用
+   - 「捕る」「獲る」「取る」など同音異義語の誤り
+   - 文脈に合わない漢字の使用
+
+3. 送り仮名の揺れ
+   - 「行う」「行なう」、「受け取る」「受取る」など
+   - 記事内での統一性を確認
+
+【重要】
+- 原文は絶対にそのまま残し、指摘箇所の直後に「（校閲：●●）」を追加するのみ
+- 誤字を正しい文字に置き換えることは禁止
+- 問題がない場合は「校閲チェック完了：問題なし」と報告"""
+
+        user_message = f"""以下の一問一答形式の記事を校閲チェックしてください。
+
+{qa_text}
 
 ---
 
@@ -237,5 +385,82 @@ def revise_markdown(
         return {
             'success': False,
             'markdown': '',
+            'error': f'修正エラー: {str(e)}'
+        }
+
+
+def revise_qa(
+    qa_text: str,
+    revision_request: str,
+    api_key: str = None,
+) -> dict:
+    """
+    一問一答形式を修正リクエストに基づいて修正
+    """
+    api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+    
+    if not api_key:
+        return {
+            'success': False,
+            'qa_text': '',
+            'error': 'ANTHROPIC_API_KEYが設定されていません'
+        }
+    
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        system_prompt = """あなたは日刊スポーツの一問一答形式の記事を編集するエディターです。
+
+ユーザーから修正リクエストを受け取り、既存の一問一答形式の記事を修正してください。
+
+【重要なルール】
+1. 修正リクエストで指示された箇所のみを修正する
+2. 指示されていない部分は一切変更しない
+3. 一問一答の形式（―質問 回答）は維持する
+4. 修正後の一問一答全体を出力する
+5. 説明は不要、一問一答のテキストのみを出力する"""
+
+        user_message = f"""以下の一問一答形式の記事を修正してください。
+
+【現在の一問一答】
+{qa_text}
+
+---
+
+【修正リクエスト】
+{revision_request}
+
+---
+
+上記の修正リクエストに従って、一問一答を修正してください。
+修正後の一問一答全体を出力してください。説明は不要です。"""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=8000,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": user_message}
+            ]
+        )
+        
+        revised_qa = message.content[0].text
+        
+        return {
+            'success': True,
+            'qa_text': revised_qa,
+            'error': None
+        }
+        
+    except anthropic.APIError as e:
+        return {
+            'success': False,
+            'qa_text': '',
+            'error': f'Claude API エラー: {str(e)}'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'qa_text': '',
             'error': f'修正エラー: {str(e)}'
         }
