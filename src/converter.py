@@ -27,6 +27,34 @@ def load_qa_prompt():
     return ""
 
 
+def preprocess_article(text: str) -> str:
+    """
+    記事テキストの前処理
+    - 全角英数字を半角に変換
+    - 文頭・行頭のスペース（全角・半角）を削除
+    """
+    # 全角英数字 → 半角変換テーブル
+    # 全角数字：０-９ → 0-9
+    # 全角大文字：Ａ-Ｚ → A-Z
+    # 全角小文字：ａ-ｚ → a-z
+    zen_to_han = str.maketrans(
+        '０１２３４５６７８９'
+        'ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ'
+        'ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ',
+        '0123456789'
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        'abcdefghijklmnopqrstuvwxyz'
+    )
+    text = text.translate(zen_to_han)
+
+    # 行頭の全角スペース・半角スペース・タブを削除
+    lines = text.split('\n')
+    lines = [line.lstrip('\u3000 \t') for line in lines]
+    text = '\n'.join(lines)
+
+    return text
+
+
 def convert_to_markdown(article_text: str, api_key: str, reporter_name: str = "") -> dict:
     """
     記事テキストをマークダウン形式に変換する
@@ -49,6 +77,9 @@ def convert_to_markdown(article_text: str, api_key: str, reporter_name: str = ""
         if reporter_name:
             reporter_instruction = f"\n\n【記者名】\n記事末尾に「【{reporter_name}】」を配置してください。"
         
+        # 前処理：全角英数→半角、行頭スペース削除
+        article_text = preprocess_article(article_text)
+
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=8192,
@@ -99,6 +130,9 @@ def convert_to_qa(article_text: str, api_key: str) -> dict:
         
         qa_rules = load_qa_prompt()
         
+        # 前処理：全角英数→半角、行頭スペース削除
+        article_text = preprocess_article(article_text)
+
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=8192,
