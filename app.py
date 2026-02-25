@@ -93,13 +93,22 @@ def delete_user(username):
 def clear_workspace():
     """作業スペースをクリアする"""
     keys_to_clear = [
+        # 変換結果
         'markdown_result',
         'qa_result',
         'original_filename',
         'original_article',
         'revision_history',
+        'qa_revision_history',
         'proofread_report',
-        'article_input'
+        'qa_proofread_report',
+        'qa_filename',
+        # 入力エリア（テキストエリアのキー）
+        'md_article_input',
+        'qa_article_input',
+        'md_reporter',
+        'md_revision_input',
+        'qa_revision_input',
     ]
     for key in keys_to_clear:
         if key in st.session_state:
