@@ -103,7 +103,7 @@ def clear_workspace():
         'proofread_report',
         'qa_proofread_report',
         'qa_filename',
-        # 入力エリア（テキストエリアのキー）
+        # 入力エリアの値
         'md_article_input',
         'qa_article_input',
         'md_reporter',
@@ -113,6 +113,10 @@ def clear_workspace():
     for key in keys_to_clear:
         if key in st.session_state:
             del st.session_state[key]
+
+    # ウィジェットのキーをインクリメントして強制リセット
+    # Streamlitはキーが変わると新しいウィジェットとして再描画するため入力値がクリアされる
+    st.session_state['widget_key'] = st.session_state.get('widget_key', 0) + 1
 
 
 def load_css():
@@ -287,12 +291,15 @@ def markdown_tab(api_key):
         article_text = ""
         filename = "article"
         
+        # クリア時にウィジェットを再描画するためのキー
+        wk = st.session_state.get('widget_key', 0)
+
         if input_method == "テキストを直接入力":
             article_text = st.text_area(
                 "原稿をコピー＆ペースト",
                 height=300,
                 placeholder="ここに記事の原稿を貼り付けてください...",
-                key="md_article_input"
+                key=f"md_article_input_{wk}"
             )
             filename = "markdown"
         else:
@@ -482,12 +489,15 @@ def qa_tab(api_key):
         article_text = ""
         filename = "qa"
         
+        # クリア時にウィジェットを再描画するためのキー
+        wk = st.session_state.get('widget_key', 0)
+
         if input_method == "テキストを直接入力":
             article_text = st.text_area(
                 "音声文字起こしをコピー＆ペースト",
                 height=300,
                 placeholder="ここに音声文字起こしを貼り付けてください...",
-                key="qa_article_input"
+                key=f"qa_article_input_{wk}"
             )
             filename = "qa"
         else:
