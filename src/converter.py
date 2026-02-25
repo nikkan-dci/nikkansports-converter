@@ -134,7 +134,7 @@ def convert_to_qa(article_text: str, api_key: str) -> dict:
 
 def proofread_article(markdown_text: str, api_key: str) -> dict:
     """
-    マークダウン変換後の記事を校閲する
+    マークダウン変換後の記事を校閲する（指摘箇所のみをリスト形式で出力）
     
     Args:
         markdown_text: 校閲する変換済みテキスト
@@ -148,37 +148,52 @@ def proofread_article(markdown_text: str, api_key: str) -> dict:
         
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=4096,
+            max_tokens=8192,
             messages=[
                 {
                     "role": "user",
-                    "content": f"""以下のマークダウン変換済み記事を校閲してください。
+                    "content": f"""以下のマークダウン変換済み記事を校閲し、指摘箇所のみをリスト形式で出力してください。
+全文の出力は不要です。
 
 【校閲チェック項目】
-1. 誤字・脱字
-2. 漢字の誤用（同音異義語の誤りなど）
-3. 送り仮名の揺れ
+1. 誤字・脱字（文字の抜け・余分な文字・タイプミス）
+2. 漢字の誤用（「捕る」「獲る」「取る」など同音異義語の誤り）
+3. 送り仮名の揺れ（「行う」「行なう」など記事内での統一性）
 4. 全角英数字（半角に統一すべき箇所）
 5. タグの閉じ忘れ（####の不足など）
-6. 見出しの問題（500文字ルール違反、パターンの連続など）
+
+【出力形式】
+指摘がある場合は以下の形式でリストアップ：
+
+■ 指摘1
+元の表現：「〇〇〇」
+指摘内容：（校閲：●●）
+前後の文脈：〜〜〜「〇〇〇」〜〜〜
+
+■ 指摘2
+...
+
+指摘がない場合：
+「校閲チェック完了：問題は見つかりませんでした」
 
 【重要】
-- 原文は絶対にそのまま残す
-- 指摘箇所の直後に (校閲:●●) を追加するのみ
-- 問題がない場合は「校閲チェック完了：問題は見つかりませんでした」と出力
+- 全文をコピーして出力しない
+- 指摘箇所の前後の文脈（20〜30文字程度）のみ示す
+- 確実に誤りと判断できる箇所のみ指摘する
 
 【校閲する記事】
-{markdown_text}
-
-校閲結果を出力してください。"""
+{markdown_text}"""
                 }
             ]
         )
         
         report = message.content[0].text
         
-        # 指摘件数をカウント（「校閲:」の出現回数）
-        issues_count = len(re.findall(r'校閲[:：]', report))
+        # 指摘件数をカウント（「校閲：」または「■ 指摘」の出現回数）
+        issues_count = len(re.findall(r'■\s*指摘\d+', report))
+        if issues_count == 0:
+            # フォールバック：「校閲:」の出現回数
+            issues_count = len(re.findall(r'校閲[:：]', report))
         
         return {
             'success': True,
@@ -198,7 +213,7 @@ def proofread_article(markdown_text: str, api_key: str) -> dict:
 
 def proofread_qa(qa_text: str, api_key: str) -> dict:
     """
-    一問一答変換後のテキストを校閲する
+    一問一答変換後のテキストを校閲する（指摘箇所のみをリスト形式で出力）
     
     Args:
         qa_text: 校閲する変換済みテキスト
@@ -212,34 +227,49 @@ def proofread_qa(qa_text: str, api_key: str) -> dict:
         
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=4096,
+            max_tokens=8192,
             messages=[
                 {
                     "role": "user",
-                    "content": f"""以下の一問一答変換済みテキストを校閲してください。
+                    "content": f"""以下の一問一答変換済みテキストを校閲し、指摘箇所のみをリスト形式で出力してください。
+全文の出力は不要です。
 
 【校閲チェック項目】
-1. 誤字・脱字
+1. 誤字・脱字（文字の抜け・余分な文字・タイプミス）
 2. 漢字の誤用（同音異義語の誤りなど）
-3. 送り仮名の揺れ
+3. 送り仮名の揺れ（記事内での統一性）
+
+【出力形式】
+指摘がある場合は以下の形式でリストアップ：
+
+■ 指摘1
+元の表現：「〇〇〇」
+指摘内容：（校閲：●●）
+前後の文脈：〜〜〜「〇〇〇」〜〜〜
+
+■ 指摘2
+...
+
+指摘がない場合：
+「校閲チェック完了：問題は見つかりませんでした」
 
 【重要】
-- 原文は絶対にそのまま残す
-- 指摘箇所の直後に (校閲:●●) を追加するのみ
-- 問題がない場合は「校閲チェック完了：問題は見つかりませんでした」と出力
+- 全文をコピーして出力しない
+- 指摘箇所の前後の文脈（20〜30文字程度）のみ示す
+- 確実に誤りと判断できる箇所のみ指摘する
 
 【校閲するテキスト】
-{qa_text}
-
-校閲結果を出力してください。"""
+{qa_text}"""
                 }
             ]
         )
         
         report = message.content[0].text
         
-        # 指摘件数をカウント（「校閲:」の出現回数）
-        issues_count = len(re.findall(r'校閲[:：]', report))
+        # 指摘件数をカウント
+        issues_count = len(re.findall(r'■\s*指摘\d+', report))
+        if issues_count == 0:
+            issues_count = len(re.findall(r'校閲[:：]', report))
         
         return {
             'success': True,
